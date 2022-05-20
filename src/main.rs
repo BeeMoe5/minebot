@@ -8,6 +8,8 @@ use rand::Rng;
 use serenity::framework::standard::{
     help_commands, Args, CommandGroup, CommandResult, DispatchError, HelpOptions,
 };
+use serenity::async_trait;
+use serenity::framework::standard::macros::{command, group, help, hook};
 use serenity::framework::StandardFramework;
 use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
