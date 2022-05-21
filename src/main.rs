@@ -5,11 +5,11 @@ use std::time::Duration;
 
 use dotenv::dotenv;
 use rand::Rng;
-use serenity::framework::standard::{
-    help_commands, Args, CommandGroup, CommandResult, DispatchError, HelpOptions,
-};
 use serenity::async_trait;
 use serenity::framework::standard::macros::{command, group, help, hook};
+use serenity::framework::standard::{
+    help_commands, Args, CommandError, CommandGroup, CommandResult, DispatchError, HelpOptions,
+};
 use serenity::framework::StandardFramework;
 use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
@@ -67,6 +67,17 @@ async fn handle_errors(ctx: &Context, msg: &Message, error: DispatchError, comma
                 .await
                 .expect("Could not send message");
         }
+
+        DispatchError::OnlyForGuilds => {
+            msg.channel_id
+                .say(
+                    &ctx.http,
+                    format!("{} can only be used in servers, not DMs.", command),
+                )
+                .await
+                .expect("Could not send message");
+        }
+
         err => {
             msg.channel_id
                 .say(
@@ -79,6 +90,16 @@ async fn handle_errors(ctx: &Context, msg: &Message, error: DispatchError, comma
     }
 }
 
+#[hook]
+async fn command_result_handler(ctx: &Context, msg: &Message, command: &str, error: CommandResult) {
+    if let Err(why) = error {
+        let message = format!("Error in {}: {:?}", command, why);
+        if let Err(_) = msg.channel_id.say(&ctx.http, &message).await {
+            println!("Failed to send message. {}", message)
+        }
+    }
+}
+
 #[command]
 async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
     msg.channel_id.say(&ctx, "Pong!").await?;
@@ -86,7 +107,7 @@ async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command]
-async fn ngg(ctx: &Context, msg: &Message) -> CommandResult {
+async fn ngg(ctx: &Context, msg: &Message) -> CommandResult {  // i am too scared and lazy to refactor this.
     msg.channel_id.say(&ctx, "Guess the number!").await?;
     let secret_number = rand::thread_rng().gen_range(1..101);
     let mut attempts = 0;
@@ -179,32 +200,31 @@ async fn ngg(ctx: &Context, msg: &Message) -> CommandResult {
 #[only_in("guilds")]
 #[owners_only]
 async fn nick(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    let guild = match msg.guild_id {
+        Some(id) => id,
+        None => {
+            return Err(CommandError::from(
+                "should not reach here but this means no guild was found. (LN 189)",
+            ));
+        }
+    };
     if args.message().to_lowercase() == "reset" {
-        msg.guild_id
-            .unwrap()
-            .edit_nickname(&ctx.http, None)
-            .await
-            .expect("Could not reset nickname");
+        guild.edit_nickname(&ctx.http, None).await?;
 
-        msg.reply_ping(&ctx.http, "Reset my nickname")
-            .await
-            .expect("Could not send message");
+        msg.reply_ping(&ctx.http, "Reset my nickname").await?;
 
         return Ok(());
     }
 
-    msg.guild_id
-        .unwrap()
+    guild
         .edit_nickname(&ctx.http, Option::from(args.message()))
-        .await
-        .expect("Could not change nickname");
+        .await?;
 
     msg.reply_ping(
         &ctx.http,
-        format!("Changed my nickname to `\"{}\"`", args.message()),
+        format!("Changed my nickname to \"{}\"", args.message()),
     )
-    .await
-    .expect("Could not send message");
+    .await?;
     Ok(())
 }
 
@@ -236,7 +256,8 @@ async fn main() {
         .configure(|c| c.prefix(PREFIX).owners(owners).ignore_bots(true))
         .group(&UNCATEGORIZED_GROUP)
         .help(&MY_HELP)
-        .on_dispatch_error(handle_errors);
+        .on_dispatch_error(handle_errors)
+        .after(command_result_handler);
 
     let mut client = Client::builder(&token, intents)
         .event_handler(Handler)
