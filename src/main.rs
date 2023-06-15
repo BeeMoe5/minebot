@@ -107,7 +107,7 @@ async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command]
-async fn ngg(ctx: &Context, msg: &Message) -> CommandResult {  // i am too scared and lazy to refactor this.
+async fn number(ctx: &Context, msg: &Message) -> CommandResult {  // i am too scared and lazy to refactor this.
     msg.channel_id.say(&ctx, "Guess the number!").await?;
     let secret_number = rand::thread_rng().gen_range(1..101);
     let mut attempts = 0;
@@ -242,7 +242,7 @@ async fn my_help(
 }
 
 #[group]
-#[commands(ngg, ping, nick)]
+#[commands(number, ping, nick)]
 struct Uncategorized;
 
 #[tokio::main]
